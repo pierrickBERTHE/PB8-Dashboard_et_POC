@@ -5,20 +5,42 @@ Author: Pierrick Berthe
 Date: 2024-04-04
 """
 
+
 # ============== étape 1 : Importation des librairies ====================
 
+import sys
 import pandas as pd
 import numpy as np
 import requests
 import os
 import shap
+import matplotlib
 import matplotlib.pyplot as plt
 import streamlit as st
 from memory_profiler import profile
-import socket
 import json
+import PIL
 from PIL import Image
 from io import BytesIO
+import plotly
+import plotly.graph_objects as go
+
+# Versions
+print("\nVersion des librairies utilisees :")
+print("Python        : " + sys.version)
+print("Io            : No module version")
+print("Json          : No module version")
+print("Matplotlib    : " + matplotlib.__version__)
+print("Numpy         : " + np.__version__)
+print("Os            : No module version")
+print("Pandas        : " + pd.__version__)
+print("PIL           : " + PIL.__version__)
+print("Plotly        : " + plotly.__version__)
+print("Requests      : " + requests.__version__)
+print("Shap          : " + shap.__version__)
+print("Streamlit     : " + st.__version__)
+print("\n")
+
 
 # ================= étape 2 : Chemins environnement ========================
 
@@ -26,8 +48,8 @@ from io import BytesIO
 IS_API_ON_CLOUD = True
 
 # Titre de l'application
-st.title('Projet 7\n')
-st.title('Élaborez le modèle de scoring - Dashboard\n')
+st.title('Projet 8\n')
+st.title('Réalisez un Dashboard\n')
 
 # Affichage le chemin du répertoire courant
 print("os.getcwd():",os.getcwd(), "\n")
@@ -43,9 +65,11 @@ print("URL_API:",URL_API, "\n")
 URL_API_CLIENT_SELECTION = f'{URL_API}/client_selection'
 URL_API_CLIENT_EXTRACTION= f'{URL_API}/client_extraction'
 URL_API_PREDICT = f'{URL_API}/predict'
+URL_API_FI_LOCALE= f'{URL_API}/feature_importance_locale'
 URL_API_FI_GLOBALE= f'{URL_API}/feature_importance_globale'
 
-# ====================== étape 5 : Fonctions ============================
+
+# ====================== étape 3 : Fonctions ============================
 
 def fetch_data_and_client_selection(url):
     """
@@ -109,15 +133,31 @@ def request_prediction(url, data):
     """
     Envoie une requête POST de prédiction à un service web.
     """
-    # ESSAI de la requête POST (timeout de 600 secondes)
+    # ESSAI de la requête POST
     try:
-        response = requests.post(url, json=data.to_dict(), timeout=300)
+        response = requests.post(url, json=data.to_dict())
         response.raise_for_status()
         return response.json()
 
     # Gestion des autres erreurs
     except Exception as err:
         print(f'Erreur dans la requête POST de prediction: {err}')
+        return None
+
+
+def request_fi_locale(url, data):
+    """
+    Récupère le calcul de la feature importance locale et l'affiche
+    """
+    # ESSAI de la requête POST
+    try:
+        response = requests.post(url, json=data.to_dict())
+        response.raise_for_status()
+        return response.json()
+
+    # Gestion des autres erreurs
+    except Exception as err:
+        print(f'Erreur dans la requête POST de FI locale: {err}')
         return None
 
 
@@ -138,7 +178,8 @@ def calcule_fi_globale(url):
     else:
         print("Erreur lors de la récupération de l'image.")
 
-# ============= étape 6 : Fonction principale du dashboard ==================
+
+# ============= étape 4 : Fonction principale du dashboard ==================
 
 @profile
 def main():
@@ -163,7 +204,7 @@ def main():
 
         # Affichage de la prédiction en français
         else:
-            if response["prediction"]["prediction"] == 0:
+            if response["prediction"] == 0:
                 st.markdown(
                     '<div style="background-color: #98FB98; padding: 10px;'
                     'border-radius: 5px; color: #000000;"'
@@ -183,39 +224,84 @@ def main():
 
             # Affichage de la prédiction
             ligne_prediction = {
-                'explainer': response['prediction']['explainer'][1],
-                'prediction': response['prediction']['prediction'],
-                'probabilité': response['prediction']['probabilité']
+                'prediction': response['prediction'],
+                'proba_0': response['proba_0'],
+                'proba_1': response['proba_1'],
+                'seuil_predict': response['seuil_predict']
             }
+
+            # Affichage de la prédiction
             st.dataframe(ligne_prediction)
 
-            # Transformation des données pour SHAP en array puis en dataframe
-            shap_values_subset_array = np.array(
-                response['feature_importance_locale']['shap_values_subset']
-            )
-            client_data_subset_df = pd.DataFrame(
-                [response['feature_importance_locale']['client_data_subset']],
-                columns=response['feature_importance_locale']['top_features']
-            )
+            # Affichage de la probabilité de refus
+            fig = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=response['proba_1'],
+                domain={'x': [0, 1], 'y': [0, 1]},
+                title = {'text': "Probabilité de refus", 'font': {'size': 24}},
+                gauge={
+                    'axis': {'range': [0, 1]},
+                    'bar': {'color': "white"},
+                    'steps': [
+                        {
+                            'range': [0, response['seuil_predict']],
+                            'color': "green"
+                        },
+                        {
+                            'range': [response['seuil_predict'], 1],
+                            'color': "red"
+                        }
+                    ],
+                    'threshold': {
+                        'line': {'color': "black", 'width': 5},
+                        'thickness': 1,
+                        'value': response['seuil_predict']
+                    }
+                }
+            ))
 
-            # Affichage feature importance locale
-            st.write('Feature importance locale :')
-            shap.force_plot(
-                response['prediction']["explainer"][1],
-                shap_values_subset_array,
-                client_data_subset_df,
-                matplotlib=True
-            )
+            st.plotly_chart(fig)
+
+            # Afficher la valeur de seuil_predict
+            st.write(f"Seuil de prédiction : {response['seuil_predict']}")
+
+            # Calcule et affichage de feature importance locale
+            st.title('Feature importance locale :')
+            response = request_fi_locale(URL_API_FI_LOCALE, client_data)
+
+            # Affichage d'une erreur si la prédiction est None
+            if response is None:
+                st.write('Erreur de feature importance locale\n')
+
+            else :
+                # Transformation données pour SHAP en array puis en dataframe
+                shap_values_subset_array = np.array(
+                    response['fi_locale_subset']['shap_values_subset']
+                )
+
+                client_data_subset_df = pd.DataFrame(
+                    [response['fi_locale_subset']['client_data_subset']],
+                    columns=response['fi_locale_subset']['top_features']
+                )
+
+                # Affichage feature importance locale
+                shap.force_plot(
+                    response["explainer"][1],
+                    shap_values_subset_array,
+                    client_data_subset_df,
+                    matplotlib=True
+                )
 
             # Obtention de la figure actuelle et affichage streamlit
             fig = plt.gcf()
             st.pyplot(fig)
 
             # Calcule et affichage de feature importance globale
-            st.write('Feature importance globale :')
+            st.title('Feature importance globale :')
             calcule_fi_globale(URL_API_FI_GLOBALE)
 
-# =================== étape 7 : Run du dashboard ==========================
+
+# =================== étape 5 : Run du dashboard ==========================
 
 if __name__ == '__main__':
     main()
