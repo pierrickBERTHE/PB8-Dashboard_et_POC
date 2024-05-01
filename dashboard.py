@@ -45,7 +45,7 @@ print("\n")
 # ================= étape 2 : Chemins environnement ========================
 
 # Indicateur pour savoir si l'API est sur le cloud ou en local
-IS_API_ON_CLOUD = True
+IS_API_ON_CLOUD = False  
 
 # Titre de l'application
 st.title('Projet 8\n')
@@ -58,7 +58,7 @@ print("os.getcwd():",os.getcwd(), "\n")
 if IS_API_ON_CLOUD:
     URL_API = 'http://pierrickberthe.eu.pythonanywhere.com'
 else:
-    URL_API = 'http://127.0.0.1:6000'
+    URL_API = 'http://127.0.0.1:5000'
 print("URL_API:",URL_API, "\n")
 
 # URL de l'API pour les requêtes POST
@@ -128,7 +128,7 @@ def get_client_data(url, client_id):
         return None
 
 
-@st.cache_resource
+# @st.cache_resource
 def request_prediction(url, data):
     """
     Envoie une requête POST de prédiction à un service web.
@@ -151,7 +151,9 @@ def request_fi_locale(url, data):
     """
     # ESSAI de la requête POST
     try:
+        print('request.post pret a lancer')
         response = requests.post(url, json=data.to_dict())
+        print('request.post_effectued')
         response.raise_for_status()
         return response.json()
 
@@ -304,4 +306,14 @@ def main():
 # =================== étape 5 : Run du dashboard ==========================
 
 if __name__ == '__main__':
-    main()
+    # main()
+    client_id = fetch_data_and_client_selection(
+        URL_API_CLIENT_SELECTION
+    )
+    client_data = get_client_data(URL_API_CLIENT_EXTRACTION, client_id)
+
+    # Bouton pour calculer la prédiction => envoi de la requête POST
+    response = request_prediction(URL_API_PREDICT, client_data)
+    print(response)
+    response = request_fi_locale(URL_API_FI_LOCALE, client_data)
+    print(response)
