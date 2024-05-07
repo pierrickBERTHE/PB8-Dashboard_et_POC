@@ -1,0 +1,13 @@
+train: ./data/cleaned/train
+val: ./data/cleaned/test
+
+nc: 7
+names: [
+  'Baby Care',
+  'Beauty and Personal Care',
+  'Computers',
+  'Home Decor & Festive Needs',
+  'Home Furnishing',
+  'Kitchen & Dining',
+  'Watches'
+]
