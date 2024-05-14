@@ -1,6 +1,9 @@
 """
 Description: Ce fichier contient le dashboard de l'application Streamlit.
 
+URL dashboard déployé sur le cloud streamlit : 
+https://projet8ocrdatascientist-pierrick-berthe.streamlit.app/
+
 Author: Pierrick Berthe
 Date: 2024-04-30
 """
